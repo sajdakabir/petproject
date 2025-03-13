@@ -1,5 +1,5 @@
 {
-  "name": "march",
+  "name": "petproject",
   "private": true,
   "scripts": {
     "build": "turbo run build",

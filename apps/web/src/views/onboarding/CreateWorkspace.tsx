@@ -128,7 +128,7 @@ const CreateWorkspace = (props: { accessToken: string }) => {
                 slug ? "text-focus-text-hover" : "text-focus-text"
               } mb-3 text-md font-medium rounded-md`}
             >
-              {slug ? `trymarch.dev/${slug}` : "trymarch.dev/"}
+              {slug ? `petproject.sajdakabir.me/${slug}` : "trymarch.dev/"}
             </h3>
             <input
               type="slug"
