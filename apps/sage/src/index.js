@@ -9,13 +9,11 @@ const { ValidationError } = Joi;
 const app = express();
 
 // 🔹 CORS middleware
-app.use(cors());
-
-app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    next();
-});
+// Configure CORS with specific options for Google OAuth
+app.use(cors({
+    origin: ['https://petproject.sajdakabir.me', 'http://localhost:3000'],
+    credentials: true
+}));
 
 // 🔹 Body parser middleware
 app.use(express.json());
