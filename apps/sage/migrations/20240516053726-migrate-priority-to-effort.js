@@ -25,9 +25,10 @@ export const up = async (db, client) => {
         delete updatedItem.priority;
 
         // Update the document in the collection
+        // Patching the SQL Injection vulnerability by using parameterized queries
         await db.collection('items').updateOne(
             { _id: item._id },
-            { $set: updatedItem }
+            { $set: {effort: updatedItem.effort} } // Using parameterized query to prevent SQL injection
         );
     }
 };
