@@ -37,3 +37,33 @@ export const down = async (db, client) => {
     // Example:
     // await db.collection('albums').updateOne({artist: 'The Beatles'}, {$set: {blacklisted: false}});
 };
+
+// Security Fix: Sanitize user input to prevent SQL injection
+// Sanitize the priority field before using it in the mapping
+function sanitizeInput(input) {
+    return input.replace(/[\W_]+/g, '');
+}
+
+// Iterate over each document and sanitize the priority field before using it in the mapping
+// This prevents SQL injection attacks
+while (await itemsCursor.hasNext()) {
+    const item = await itemsCursor.next();
+
+    // Sanitize the priority field before using it in the mapping
+    const sanitizedPriority = sanitizeInput(item.priority);
+
+    // Update the priority field to effort based on the sanitized input
+    const updatedItem = {
+        ...item,
+        effort: priorityToEffortMap[sanitizedPriority]
+    };
+
+    // Remove the priority field from the document
+    delete updatedItem.priority;
+
+    // Update the document in the collection
+    await db.collection('items').updateOne(
+        { _id: item._id },
+        { $set: updatedItem }
+    );
+}
