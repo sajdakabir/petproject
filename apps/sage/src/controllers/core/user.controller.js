@@ -25,7 +25,12 @@ const updateUserController = async (req, res, next) => {
         }
         const { fullName, userName, avatar, hasFinishedOnboarding, onboarding, timezone } = value;
 
-        await updateUser(user, { fullName, userName, avatar, hasFinishedOnboarding, onboarding, timezone });
+        // Sanitize user input before updating
+        const sanitizedFullName = fullName.replace(/<[^>]*>/g, "");
+        const sanitizedUserName = userName.replace(/<[^>]*>/g, "");
+        const sanitizedAvatar = avatar.replace(/<[^>]*>/g, "");
+
+        await updateUser(user, { fullName: sanitizedFullName, userName: sanitizedUserName, avatar: sanitizedAvatar, hasFinishedOnboarding, onboarding, timezone });
 
         res.json({
             "status": 200,
@@ -41,7 +46,10 @@ const updateUserOnBoardedController = async (req, res, next) => {
         const user = req.user.id;
         const { hasFinishedOnboarding } = req.body;
 
-        await updateUserOnBoarded(user, hasFinishedOnboarding);
+        // Sanitize user input before updating
+        const sanitizedHasFinishedOnboarding = hasFinishedOnboarding.replace(/<[^>]*>/g, "");
+
+        await updateUserOnBoarded(user, sanitizedHasFinishedOnboarding);
 
         res.json({
             "status": 200,
