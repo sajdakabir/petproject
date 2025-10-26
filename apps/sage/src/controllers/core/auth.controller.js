@@ -1,8 +1,13 @@
+```javascript
 import Joi from "joi";
 import { RegisterPayload, LoginPayload } from "../../payloads/core/auth.payload.js";
 import { createEmailUser, validateEmailUser, createMagicLoginLink, validateMagicLoginLink, getUserById, validateGoogleUser, getUserByEmail, createGoogleUser } from "../../services/core/user.service.js";
 import { generateJWTTokenPair } from "../../utils/jwt.service.js";
 import { BlackList } from "../../models/core/black-list.model.js";
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const { ValidationError } = Joi;
 
@@ -160,3 +165,4 @@ export {
     authenticateWithGoogleController,
     logOutController
 };
+```
