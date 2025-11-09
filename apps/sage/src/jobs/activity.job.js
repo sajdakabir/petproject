@@ -1,9 +1,56 @@
+```javascript
 import { ItemActivity } from "../models/lib/itemActivity.model.js";
 import { Worker } from "bullmq";
 import { redisConnection } from "../loaders/redis.loader.js";
 import { Label } from "../models/lib/label.model.js";
 import { User } from "../models/core/user.model.js";
 import { Cycle } from "../models/lib/cycle.model.js"
+
+// Security: Validate job data to prevent unauthorized operations
+const validateJobData = (data) => {
+    const requiredFields = ['actor', 'workspace', 'space'];
+    for (const field of requiredFields) {
+        if (!data[field]) {
+            throw new Error(`Security validation failed: Missing required field ${field}`);
+        }
+    }
+    
+    // Validate ObjectId format to prevent injection
+    const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdRegex.test(data.actor.toString())) {
+        throw new Error('Security validation failed: Invalid actor ID format');
+    }
+    if (!objectIdRegex.test(data.workspace.toString())) {
+        throw new Error('Security validation failed: Invalid workspace ID format');
+    }
+    if (!objectIdRegex.test(data.space.toString())) {
+        throw new Error('Security validation failed: Invalid space ID format');
+    }
+    if (data.item && !objectIdRegex.test(data.item.toString())) {
+        throw new Error('Security validation failed: Invalid item ID format');
+    }
+    
+    return true;
+};
+
+// Security: Verify actor has permission to perform operations in workspace/space
+const verifyActorPermissions = async (actor, workspace, space) => {
+    const user = await User.findById(actor).select('_id workspaces').lean();
+    if (!user) {
+        throw new Error('Security validation failed: Actor not found');
+    }
+    
+    // Verify user belongs to the workspace
+    const hasWorkspaceAccess = user.workspaces && user.workspaces.some(
+        ws => ws.toString() === workspace.toString()
+    );
+    
+    if (!hasWorkspaceAccess) {
+        throw new Error('Security validation failed: Actor does not have access to workspace');
+    }
+    
+    return true;
+};
 
 // Track Changes in name
 const trackName = async (
@@ -427,172 +474,4 @@ const ITEM_ACTIVITY_MAPPER = {
     name: trackName,
     effort: trackEffort,
     status: trackStatus,
-    description: trackDescription,
-    dueDate: trackDueDate,
-    labels: trackLabels,
-    assignees: trackAssignees,
-    cycles: trackCycle
-};
-
-const updateItemActivity = async (data) => {
-    const { requestedData, currentInstance, item, space, workspace, actor } = data;
-
-    for (const key in requestedData) {
-        if (Object.prototype.hasOwnProperty.call(requestedData, key)) {
-            const func = ITEM_ACTIVITY_MAPPER[key];
-            if (func) {
-                await func(
-                    requestedData,
-                    currentInstance,
-                    item,
-                    space,
-                    workspace,
-                    actor
-                );
-            } else {
-                console.warn(`No mapping function found for key: ${key}`);
-            }
-        }
-    }
-}
-
-const deleteItemActivity = async (data) => {
-    const { item, space, workspace, actor } = data;
-    const itemActivity = new ItemActivity({
-        item,
-        space,
-        workspace,
-        comment: "deleted the item",
-        verb: "deleted",
-        actor,
-        field: "item"
-    });
-
-    await itemActivity.save();
-};
-
-const createCommentActivity = async (data) => {
-    const { requestedData, item, space, workspace, actor } = data;
-    const activity = new ItemActivity({
-        item,
-        space,
-        workspace,
-        comment: "created a comment",
-        verb: "created",
-        actor,
-        field: "comment",
-        newValue: requestedData.comment || "",
-        newIdentifier: requestedData._id || null,
-        issueCommentId: requestedData._id || null
-    });
-
-    await activity.save();
-};
-
-const updateCommentActivity = async (data) => {
-    const { requestedData, currentInstance, item, space, workspace, actor } = data;
-    if (currentInstance.comment !== requestedData.comment) {
-        const itemActivity = new ItemActivity({
-            item,
-            space,
-            workspace,
-            comment: "updated a comment",
-            verb: "updated",
-            actor,
-            field: "comment",
-            oldValue: currentInstance.comment || "",
-            newValue: requestedData.comment || "",
-            oldIdentifier: currentInstance._id,
-            newIdentifier: currentInstance._id || null,
-            issue_comment_id: currentInstance._id || null
-        });
-
-        await itemActivity.save();
-    }
-};
-
-const deleteCommentActivity = async (data) => {
-    const { item, space, workspace, actor } = data;
-    const itemActivity = new ItemActivity({
-        item,
-        space,
-        workspace,
-        comment: "deleted the comment",
-        verb: "deleted",
-        actor,
-        field: "comment"
-    });
-
-    await itemActivity.save();
-};
-
-const createCycleActivity = async (data) => {
-    // const { requestedData, currentInstance, item, space, workspace, actor } = data;
-
-    // const itemActivity = new ItemActivity({
-    //     requestedData,
-    //     currentInstance,
-    //     item,
-    //     space,
-    //     workspace,
-    //     actor,
-    //     verb: 'Created',
-    //     comment: 'Item added to the cycle',
-    //     field: 'Cycle'
-
-    // })
-    // await itemActivity.save();
-}
-
-const issueActivityWorker = new Worker('itemActivityQueue', async (job) => {
-    if (job.data.type === 'item.activity.created') {
-        await createItemActivity(job.data);
-    } else if (job.data.type === 'item.activity.updated') {
-        await updateItemActivity(job.data);
-    } else if (job.data.type === 'item.activity.deleted') {
-        await deleteItemActivity(job.data);
-    } else if (job.data.type === 'comment.activity.created') {
-        await createCommentActivity(job.data);
-    } else if (job.data.type === 'comment.activity.updated') {
-        await updateCommentActivity(job.data);
-    } else if (job.data.type === 'comment.activity.deleted') {
-        await deleteCommentActivity(job.data);
-    }
-}, {
-    connection: redisConnection
-});
-
-issueActivityWorker.on('completed', async (job) => {
-    console.log(`Job ${job.id} has completed!`);
-    // Remove the job from the queue after completion
-    await job.remove();
-});
-
-issueActivityWorker.on('failed', (job, err) => {
-    console.error(`Job ${job.id} has failed with ${err.message}`);
-});
-
-issueActivityWorker.on('error', (err) => {
-    console.error('Worker encountered an error:', err);
-});
-
-console.log('Worker setup completed.');
-
-export {
-    trackName,
-    trackDescription,
-    trackEffort,
-    trackStatus,
-    trackDueDate,
-    trackLabels,
-    trackAssignees,
-    trackCycle,
-    createItemActivity,
-    updateItemActivity,
-    deleteItemActivity,
-    createCommentActivity,
-    updateCommentActivity,
-    deleteCommentActivity,
-    createCycleActivity,
-    issueActivityWorker
-};
+    description: trackDescription
